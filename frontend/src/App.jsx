@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import EventLog from './EventLog.jsx';
 import ManageHold from './ManageHold.jsx';
 import { requestApi } from './api.js';
 
@@ -140,15 +141,26 @@ function App() {
           >
             Manage hold
           </button>
+          <button
+            className={screen === 'events' ? 'view-tab view-tab-active' : 'view-tab'}
+            onClick={() => setScreen('events')}
+            type="button"
+          >
+            Event log
+          </button>
         </nav>
         <header className="page-header">
           <div>
-            <p className="eyebrow">{screen === 'seats' ? 'LIVE EVENT SEATING' : 'RESERVATION DETAILS'}</p>
-            <h1 id="page-title">{screen === 'seats' ? 'Choose your seat' : 'Manage your hold'}</h1>
+            <p className="eyebrow">
+              {screen === 'seats' ? 'LIVE EVENT SEATING' : screen === 'manage' ? 'RESERVATION DETAILS' : 'SYSTEM HISTORY'}
+            </p>
+            <h1 id="page-title">
+              {screen === 'seats' ? 'Choose your seat' : screen === 'manage' ? 'Manage your hold' : 'Event log'}
+            </h1>
             <p className="intro">
               {screen === 'seats'
                 ? 'Select an available seat to place a temporary hold.'
-                : 'Confirm, extend, or release an existing hold.'}
+                : screen === 'manage' ? 'Confirm, extend, or release an existing hold.' : 'Review reservation activity in chronological order.'}
             </p>
           </div>
           {screen === 'seats' && (
@@ -161,6 +173,8 @@ function App() {
 
         {screen === 'manage' ? (
           <ManageHold />
+        ) : screen === 'events' ? (
+          <EventLog />
         ) : (
           <>
             <form className="booking-bar" onSubmit={handleHold}>
