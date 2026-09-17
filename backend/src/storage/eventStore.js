@@ -11,7 +11,12 @@ function updateEvent(event) {
   currentEvent = event;
 }
 
+function resetEvent() {
+  currentEvent = createEvent(config.seatsPerEvent);
+}
+
 module.exports = {
   getEvent,
-  updateEvent
+  updateEvent,
+  resetEvent
 };
