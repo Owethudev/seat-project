@@ -1,0 +1,16 @@
+{
+  "name": "ticket-reservation-backend",
+  "version": "1.0.0",
+  "description": "Express API for the ticket reservation system",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
