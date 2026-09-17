@@ -1,5 +1,6 @@
 const config = require('../config/config');
 const eventStore = require('../storage/eventStore');
+const { getCurrentTime } = require('../utils/clock');
 const { generateHoldCode } = require('../utils/holdCode');
 
 function createServiceError(code, message, statusCode) {
@@ -27,7 +28,59 @@ function createUniqueHoldCode(event) {
   return holdCode;
 }
 
-function createHold({ email, seatNumber }) {
+function isHoldExpired(hold, getTime) {
+  return getTime() >= new Date(hold.expiresAt);
+}
+
+function expireHolds(getTime = getCurrentTime) {
+  const event = eventStore.getEvent();
+  let expiredHoldCount = 0;
+
+  for (const seat of event.seats) {
+    if (seat.status === 'held' && seat.hold && isHoldExpired(seat.hold, getTime)) {
+      seat.status = 'available';
+      delete seat.hold;
+      expiredHoldCount += 1;
+    }
+  }
+
+  if (expiredHoldCount > 0) {
+    eventStore.updateEvent(event);
+  }
+
+  return expiredHoldCount;
+}
+
+function getActiveHold(holdCode, getTime = getCurrentTime) {
+  const event = eventStore.getEvent();
+  const seat = event.seats.find((currentSeat) => (
+    currentSeat.hold && currentSeat.hold.code === holdCode
+  ));
+
+  if (!seat || !seat.hold) {
+    throw createServiceError(
+      'HOLD_NOT_FOUND',
+      'The hold does not exist.',
+      404
+    );
+  }
+
+  if (isHoldExpired(seat.hold, getTime)) {
+    expireHolds(getTime);
+    throw createServiceError(
+      'HOLD_EXPIRED',
+      'The hold has expired.',
+      409
+    );
+  }
+
+  return {
+    seatNumber: seat.number,
+    ...seat.hold
+  };
+}
+
+function createHold({ email, seatNumber }, getTime = getCurrentTime) {
   if (!isValidEmail(email)) {
     throw createServiceError(
       'INVALID_EMAIL',
@@ -63,7 +116,7 @@ function createHold({ email, seatNumber }) {
     );
   }
 
-  const createdAt = new Date();
+  const createdAt = getTime();
   const expiresAt = new Date(
     createdAt.getTime() + config.holdExpirySeconds * 1000
   );
@@ -85,5 +138,8 @@ function createHold({ email, seatNumber }) {
 }
 
 module.exports = {
-  createHold
+  createHold,
+  expireHolds,
+  getActiveHold,
+  isHoldExpired
 };
