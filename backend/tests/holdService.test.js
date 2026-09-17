@@ -6,9 +6,11 @@ const eventStore = require('../src/storage/eventStore');
 const {
   confirmHold,
   createHold,
+  extendHold,
   expireHolds,
   getActiveHold,
-  isHoldExpired
+  isHoldExpired,
+  releaseHold
 } = require('../src/services/holdService');
 const { generateHoldCode } = require('../src/utils/holdCode');
 
@@ -34,7 +36,8 @@ test('creates a hold for an available seat', () => {
     code: hold.code,
     email: hold.email,
     createdAt: hold.createdAt,
-    expiresAt: hold.expiresAt
+    expiresAt: hold.expiresAt,
+    extensionCount: 0
   });
 });
 
@@ -367,4 +370,130 @@ test('second confirmation does not create another hold or lose the user associat
   assert.equal(event.holdHistory.length, 1);
   assert.equal(event.seats.filter((seat) => seat.hold).length, 1);
   assert.equal(event.seats[0].hold.email, hold.email);
+});
+
+test('an active hold can be extended and its expiry resets', () => {
+  let currentTime = new Date('2026-09-17T12:00:00.000Z');
+  const fakeClock = () => currentTime;
+  const hold = createHold(
+    { email: 'user@example.com', seatNumber: 1 },
+    fakeClock
+  );
+  currentTime = new Date('2026-09-17T12:00:10.000Z');
+
+  const extendedHold = extendHold({
+    email: hold.email,
+    holdCode: hold.code
+  }, fakeClock);
+
+  assert.equal(extendedHold.extensionCount, 1);
+  assert.equal(
+    Date.parse(extendedHold.expiresAt) - currentTime.getTime(),
+    config.holdExpirySeconds * 1000
+  );
+});
+
+test('a hold cannot be extended more than twice', () => {
+  let currentTime = new Date('2026-09-17T12:00:00.000Z');
+  const fakeClock = () => currentTime;
+  const hold = createHold(
+    { email: 'user@example.com', seatNumber: 1 },
+    fakeClock
+  );
+
+  extendHold({ email: hold.email, holdCode: hold.code }, fakeClock);
+  extendHold({ email: hold.email, holdCode: hold.code }, fakeClock);
+
+  assert.throws(
+    () => extendHold({ email: hold.email, holdCode: hold.code }, fakeClock),
+    { code: 'MAX_EXTENSIONS_EXCEEDED', statusCode: 409 }
+  );
+});
+
+test('an expired hold cannot be extended', () => {
+  let currentTime = new Date('2026-09-17T12:00:00.000Z');
+  const fakeClock = () => currentTime;
+  const hold = createHold(
+    { email: 'user@example.com', seatNumber: 1 },
+    fakeClock
+  );
+  currentTime = new Date(hold.expiresAt);
+
+  assert.throws(
+    () => extendHold({ email: hold.email, holdCode: hold.code }, fakeClock),
+    { code: 'HOLD_EXPIRED', statusCode: 409 }
+  );
+});
+
+test('a confirmed seat cannot be extended', () => {
+  const hold = createHold({ email: 'user@example.com', seatNumber: 1 });
+  confirmHold({ email: hold.email, holdCode: hold.code });
+
+  assert.throws(
+    () => extendHold({ email: hold.email, holdCode: hold.code }),
+    { code: 'HOLD_CONFIRMED', statusCode: 409 }
+  );
+});
+
+test('the wrong email cannot extend a hold', () => {
+  const hold = createHold({ email: 'user@example.com', seatNumber: 1 });
+
+  assert.throws(
+    () => extendHold({ email: 'other@example.com', holdCode: hold.code }),
+    { code: 'HOLD_EMAIL_MISMATCH', statusCode: 403 }
+  );
+});
+
+test('an active hold can be released and its seat becomes available', () => {
+  const hold = createHold({ email: 'user@example.com', seatNumber: 1 });
+  const release = releaseHold({ email: hold.email, holdCode: hold.code });
+  const seat = eventStore.getEvent().seats[0];
+
+  assert.deepEqual(release, {
+    seatNumber: 1,
+    holdCode: hold.code,
+    email: hold.email,
+    status: 'released'
+  });
+  assert.equal(seat.status, 'available');
+  assert.equal(seat.hold, undefined);
+});
+
+test('a confirmed seat can be released', () => {
+  const hold = createHold({ email: 'user@example.com', seatNumber: 1 });
+  confirmHold({ email: hold.email, holdCode: hold.code });
+
+  releaseHold({ email: hold.email, holdCode: hold.code });
+
+  assert.equal(eventStore.getEvent().seats[0].status, 'available');
+});
+
+test('the wrong email cannot release a hold', () => {
+  const hold = createHold({ email: 'user@example.com', seatNumber: 1 });
+
+  assert.throws(
+    () => releaseHold({ email: 'other@example.com', holdCode: hold.code }),
+    { code: 'HOLD_EMAIL_MISMATCH', statusCode: 403 }
+  );
+});
+
+test('a released hold code cannot be reused', () => {
+  const hold = createHold({ email: 'user@example.com', seatNumber: 1 });
+  releaseHold({ email: hold.email, holdCode: hold.code });
+
+  const replacementHold = createHold({ email: hold.email, seatNumber: 1 });
+
+  assert.notEqual(replacementHold.code, hold.code);
+});
+
+test('released holds remain in hourly hold history', () => {
+  for (let holdNumber = 0; holdNumber < 5; holdNumber += 1) {
+    const hold = createHold({ email: 'user@example.com', seatNumber: 1 });
+    releaseHold({ email: hold.email, holdCode: hold.code });
+  }
+
+  assert.throws(
+    () => createHold({ email: 'user@example.com', seatNumber: 1 }),
+    { code: 'HOLD_RATE_LIMIT_EXCEEDED', statusCode: 429 }
+  );
 });

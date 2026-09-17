@@ -100,3 +100,39 @@ test('POST /api/holds/confirm confirms a hold', async () => {
     server.close();
   }
 });
+
+test('POST /api/holds/extend and /api/holds/release manage a hold', async () => {
+  const server = app.listen(0);
+
+  try {
+    const holdResult = await sendHoldRequest(server, {
+      email: 'user@example.com',
+      seatNumber: 1
+    });
+    const hold = holdResult.body.hold;
+    const extensionResult = await sendHoldRequest(
+      server,
+      {
+        email: hold.email,
+        holdCode: hold.code
+      },
+      '/api/holds/extend'
+    );
+    const releaseResult = await sendHoldRequest(
+      server,
+      {
+        email: hold.email,
+        holdCode: hold.code
+      },
+      '/api/holds/release'
+    );
+
+    assert.equal(extensionResult.statusCode, 200);
+    assert.equal(extensionResult.body.hold.extensionCount, 1);
+    assert.equal(releaseResult.statusCode, 200);
+    assert.equal(releaseResult.body.release.status, 'released');
+  } finally {
+    eventStore.resetEvent();
+    server.close();
+  }
+});
