@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { requestApi } from './api.js';
 
-const SEAT_COUNT = 20;
-
 function EventLog() {
   const [events, setEvents] = useState([]);
+  const [seatNumbers, setSeatNumbers] = useState([]);
   const [seatFilter, setSeatFilter] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -18,10 +17,14 @@ function EventLog() {
       setError('');
 
       try {
-        const data = await requestApi(`/api/events${query}`);
+        const [eventData, seatData] = await Promise.all([
+          requestApi(`/api/events${query}`),
+          requestApi('/api/seats')
+        ]);
 
         if (isCurrentRequest) {
-          setEvents(data.events);
+          setEvents(eventData.events);
+          setSeatNumbers(seatData.seats.map((seat) => seat.number));
         }
       } catch (requestError) {
         if (isCurrentRequest) {
@@ -57,7 +60,7 @@ function EventLog() {
           value={seatFilter}
         >
           <option value="">All seats</option>
-          {Array.from({ length: SEAT_COUNT }, (_, index) => index + 1).map((seatNumber) => (
+          {seatNumbers.map((seatNumber) => (
             <option key={seatNumber} value={seatNumber}>
               Seat {seatNumber}
             </option>
