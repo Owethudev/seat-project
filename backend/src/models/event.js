@@ -13,7 +13,8 @@ function createEvent(seatsPerEvent) {
   }
 
   return {
-    seats
+    seats,
+    holdHistory: []
   };
 }
 

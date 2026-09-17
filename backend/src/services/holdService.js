@@ -28,6 +28,23 @@ function createUniqueHoldCode(event) {
   return holdCode;
 }
 
+function getActiveHoldCount(event, email) {
+  return event.seats.filter((seat) => (
+    seat.status === 'held' && seat.hold && seat.hold.email === email
+  )).length;
+}
+
+function getRecentHoldHistory(event, email, currentTime) {
+  const windowStart = currentTime.getTime() - (60 * 60 * 1000);
+
+  event.holdHistory = event.holdHistory.filter((holdRecord) => {
+    const createdAt = Date.parse(holdRecord.createdAt);
+    return createdAt > windowStart && createdAt <= currentTime.getTime();
+  });
+
+  return event.holdHistory.filter((holdRecord) => holdRecord.email === email);
+}
+
 function isHoldExpired(hold, getTime) {
   return getTime() >= new Date(hold.expiresAt);
 }
@@ -98,6 +115,8 @@ function createHold({ email, seatNumber }, getTime = getCurrentTime) {
   }
 
   const event = eventStore.getEvent();
+  expireHolds(getTime);
+  const currentTime = getTime();
   const seat = event.seats.find((currentSeat) => currentSeat.number === seatNumber);
 
   if (!seat) {
@@ -116,7 +135,25 @@ function createHold({ email, seatNumber }, getTime = getCurrentTime) {
     );
   }
 
-  const createdAt = getTime();
+  if (getActiveHoldCount(event, email) >= config.maxActiveHoldsPerUser) {
+    throw createServiceError(
+      'MAX_ACTIVE_HOLDS_EXCEEDED',
+      `A user cannot have more than ${config.maxActiveHoldsPerUser} active holds.`,
+      409
+    );
+  }
+
+  const recentHolds = getRecentHoldHistory(event, email, currentTime);
+
+  if (recentHolds.length >= config.maxHoldsPerHourPerUser) {
+    throw createServiceError(
+      'HOLD_RATE_LIMIT_EXCEEDED',
+      `A user cannot create more than ${config.maxHoldsPerHourPerUser} holds within one hour.`,
+      429
+    );
+  }
+
+  const createdAt = currentTime;
   const expiresAt = new Date(
     createdAt.getTime() + config.holdExpirySeconds * 1000
   );
@@ -129,6 +166,10 @@ function createHold({ email, seatNumber }, getTime = getCurrentTime) {
 
   seat.status = 'held';
   seat.hold = hold;
+  event.holdHistory.push({
+    email: hold.email,
+    createdAt: hold.createdAt
+  });
   eventStore.updateEvent(event);
 
   return {

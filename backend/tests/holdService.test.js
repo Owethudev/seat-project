@@ -15,6 +15,10 @@ test.afterEach(() => {
   eventStore.resetEvent();
 });
 
+function setSeatStatus(seatNumber, status) {
+  eventStore.getEvent().seats[seatNumber - 1].status = status;
+}
+
 test('creates a hold for an available seat', () => {
   const hold = createHold({ email: 'user@example.com', seatNumber: 5 });
   const seat = eventStore.getEvent().seats[4];
@@ -132,4 +136,139 @@ test('expiry processing frees an expired hold seat', () => {
   assert.equal(expireHolds(fakeClock), 1);
   assert.equal(eventStore.getEvent().seats[0].status, 'available');
   assert.equal(eventStore.getEvent().seats[0].hold, undefined);
+});
+
+test('a user can have two active holds', () => {
+  createHold({ email: 'user@example.com', seatNumber: 1 });
+  createHold({ email: 'user@example.com', seatNumber: 2 });
+
+  assert.equal(eventStore.getEvent().seats[0].status, 'held');
+  assert.equal(eventStore.getEvent().seats[1].status, 'held');
+});
+
+test('a user cannot create a third active hold', () => {
+  createHold({ email: 'user@example.com', seatNumber: 1 });
+  createHold({ email: 'user@example.com', seatNumber: 2 });
+
+  assert.throws(
+    () => createHold({ email: 'user@example.com', seatNumber: 3 }),
+    { code: 'MAX_ACTIVE_HOLDS_EXCEEDED', statusCode: 409 }
+  );
+});
+
+test('confirmed holds do not count toward the active-hold limit', () => {
+  createHold({ email: 'user@example.com', seatNumber: 1 });
+  setSeatStatus(1, 'confirmed');
+
+  createHold({ email: 'user@example.com', seatNumber: 2 });
+  createHold({ email: 'user@example.com', seatNumber: 3 });
+
+  assert.equal(eventStore.getEvent().seats[2].status, 'held');
+});
+
+test('expired holds do not count toward the active-hold limit', () => {
+  let currentTime = new Date('2026-09-17T12:00:00.000Z');
+  const fakeClock = () => currentTime;
+  const firstHold = createHold(
+    { email: 'user@example.com', seatNumber: 1 },
+    fakeClock
+  );
+
+  currentTime = new Date(firstHold.expiresAt);
+  createHold({ email: 'user@example.com', seatNumber: 2 }, fakeClock);
+  createHold({ email: 'user@example.com', seatNumber: 3 }, fakeClock);
+
+  assert.equal(eventStore.getEvent().seats[0].status, 'available');
+});
+
+test('released holds do not count toward the active-hold limit', () => {
+  createHold({ email: 'user@example.com', seatNumber: 1 });
+  setSeatStatus(1, 'available');
+
+  createHold({ email: 'user@example.com', seatNumber: 2 });
+  createHold({ email: 'user@example.com', seatNumber: 3 });
+
+  assert.equal(eventStore.getEvent().seats[2].status, 'held');
+});
+
+test('a user can create five holds within one hour', () => {
+  for (let seatNumber = 1; seatNumber <= 5; seatNumber += 1) {
+    createHold({ email: 'user@example.com', seatNumber });
+    setSeatStatus(seatNumber, 'available');
+  }
+
+  assert.equal(eventStore.getEvent().holdHistory.length, 5);
+});
+
+test('a user cannot create a sixth hold within one hour', () => {
+  for (let seatNumber = 1; seatNumber <= 5; seatNumber += 1) {
+    createHold({ email: 'user@example.com', seatNumber });
+    setSeatStatus(seatNumber, 'available');
+  }
+
+  assert.throws(
+    () => createHold({ email: 'user@example.com', seatNumber: 6 }),
+    { code: 'HOLD_RATE_LIMIT_EXCEEDED', statusCode: 429 }
+  );
+});
+
+test('confirmed holds still count toward the hourly limit', () => {
+  for (let seatNumber = 1; seatNumber <= 5; seatNumber += 1) {
+    createHold({ email: 'user@example.com', seatNumber });
+    setSeatStatus(seatNumber, 'confirmed');
+  }
+
+  assert.throws(
+    () => createHold({ email: 'user@example.com', seatNumber: 6 }),
+    { code: 'HOLD_RATE_LIMIT_EXCEEDED', statusCode: 429 }
+  );
+});
+
+test('released holds still count toward the hourly limit', () => {
+  for (let seatNumber = 1; seatNumber <= 5; seatNumber += 1) {
+    createHold({ email: 'user@example.com', seatNumber });
+    setSeatStatus(seatNumber, 'available');
+  }
+
+  assert.throws(
+    () => createHold({ email: 'user@example.com', seatNumber: 6 }),
+    { code: 'HOLD_RATE_LIMIT_EXCEEDED', statusCode: 429 }
+  );
+});
+
+test('expired holds still count toward the hourly limit', () => {
+  let currentTime = new Date('2026-09-17T12:00:00.000Z');
+  const fakeClock = () => currentTime;
+
+  for (let holdNumber = 0; holdNumber < 5; holdNumber += 1) {
+    const hold = createHold(
+      { email: 'user@example.com', seatNumber: 1 },
+      fakeClock
+    );
+    currentTime = new Date(hold.expiresAt);
+    expireHolds(fakeClock);
+  }
+
+  assert.throws(
+    () => createHold({ email: 'user@example.com', seatNumber: 1 }, fakeClock),
+    { code: 'HOLD_RATE_LIMIT_EXCEEDED', statusCode: 429 }
+  );
+});
+
+test('old hold history no longer prevents a hold after one hour', () => {
+  let currentTime = new Date('2026-09-17T12:00:00.000Z');
+  const fakeClock = () => currentTime;
+
+  for (let seatNumber = 1; seatNumber <= 5; seatNumber += 1) {
+    createHold({ email: 'user@example.com', seatNumber }, fakeClock);
+    setSeatStatus(seatNumber, 'available');
+  }
+
+  currentTime = new Date('2026-09-17T13:00:00.001Z');
+  const newHold = createHold(
+    { email: 'user@example.com', seatNumber: 6 },
+    fakeClock
+  );
+
+  assert.equal(newHold.seatNumber, 6);
 });
