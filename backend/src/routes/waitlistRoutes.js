@@ -1,19 +1,16 @@
 const express = require('express');
 const { joinWaitlist } = require('../services/waitlistService');
+const { requireEmail, sendError } = require('./routeHelpers');
 
 const router = express.Router();
 
 router.post('/waitlist', (request, response) => {
   try {
+    requireEmail(request.body || {});
     const waitlistEntry = joinWaitlist(request.body || {});
     response.status(201).json({ waitlistEntry });
   } catch (error) {
-    response.status(error.statusCode || 500).json({
-      error: {
-        code: error.code || 'INTERNAL_ERROR',
-        message: error.message || 'An unexpected error occurred.'
-      }
-    });
+    sendError(response, error);
   }
 });
 
