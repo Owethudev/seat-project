@@ -153,9 +153,12 @@ test('GET /api/events returns events and filters by seat number', async () => {
 
 test('API validation returns consistent errors', async () => {
   await withServer(async (server) => {
-    const invalidHold = await sendRequest(server, 'POST', '/api/holds', {
-      email: 'user@example.com',
+    const missingEmail = await sendRequest(server, 'POST', '/api/holds', {
       seatNumber: 1
+    });
+    const invalidSeat = await sendRequest(server, 'POST', '/api/holds', {
+      email: 'user@example.com',
+      seatNumber: 'one'
     });
     const invalidCode = await sendRequest(server, 'POST', '/api/holds/confirm', {
       email: 'user@example.com',
@@ -163,7 +166,13 @@ test('API validation returns consistent errors', async () => {
     });
     const invalidFilter = await sendRequest(server, 'GET', '/api/events?seatNumber=bad');
 
-    assert.equal(invalidHold.statusCode, 201);
+    assert.equal(missingEmail.statusCode, 400);
+    assert.deepEqual(missingEmail.body.error, {
+      code: 'EMAIL_REQUIRED',
+      message: 'Email is required.'
+    });
+    assert.equal(invalidSeat.statusCode, 400);
+    assert.equal(invalidSeat.body.error.code, 'INVALID_SEAT_NUMBER');
     assert.equal(invalidCode.statusCode, 400);
     assert.deepEqual(invalidCode.body.error, {
       code: 'INVALID_HOLD_CODE',

@@ -13,9 +13,10 @@ const {
   releaseHold
 } = require('../src/services/holdService');
 const { generateHoldCode } = require('../src/utils/holdCode');
+const { resetState } = require('./testState');
 
 test.afterEach(() => {
-  eventStore.resetEvent();
+  resetState();
 });
 
 function setSeatStatus(seatNumber, status) {

@@ -3,7 +3,7 @@ const http = require('node:http');
 const test = require('node:test');
 
 const app = require('../src/app');
-const eventStore = require('../src/storage/eventStore');
+const { resetState } = require('./testState');
 
 function sendHoldRequest(server, body, path = '/api/holds') {
   return new Promise((resolve, reject) => {
@@ -50,7 +50,7 @@ test('POST /api/holds creates a hold and returns HTTP 201', async () => {
     assert.equal(result.body.hold.email, 'user@example.com');
     assert.equal(result.body.hold.seatNumber, 5);
   } finally {
-    eventStore.resetEvent();
+    resetState();
     server.close();
   }
 });
@@ -70,7 +70,7 @@ test('POST /api/holds returns a consistent error for invalid email', async () =>
       message: 'A valid email address is required.'
     });
   } finally {
-    eventStore.resetEvent();
+    resetState();
     server.close();
   }
 });
@@ -96,7 +96,7 @@ test('POST /api/holds/confirm confirms a hold', async () => {
     assert.equal(confirmationResult.body.confirmation.status, 'confirmed');
     assert.equal(confirmationResult.body.confirmation.seatNumber, 1);
   } finally {
-    eventStore.resetEvent();
+    resetState();
     server.close();
   }
 });
@@ -132,7 +132,7 @@ test('POST /api/holds/extend and /api/holds/release manage a hold', async () => 
     assert.equal(releaseResult.statusCode, 200);
     assert.equal(releaseResult.body.release.status, 'released');
   } finally {
-    eventStore.resetEvent();
+    resetState();
     server.close();
   }
 });

@@ -13,9 +13,10 @@ const {
   joinWaitlist,
   removeFromWaitlist
 } = require('../src/services/waitlistService');
+const { resetState } = require('./testState');
 
 test.afterEach(() => {
-  eventStore.resetEvent();
+  resetState();
 });
 
 function makeEventSoldOut() {

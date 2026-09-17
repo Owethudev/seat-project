@@ -4,6 +4,7 @@ const test = require('node:test');
 
 const app = require('../src/app');
 const eventStore = require('../src/storage/eventStore');
+const { resetState } = require('./testState');
 
 function sendWaitlistRequest(server, body) {
   return new Promise((resolve, reject) => {
@@ -56,7 +57,7 @@ test('POST /api/waitlist accepts a user when the event is sold out', async () =>
       status: 'waiting'
     });
   } finally {
-    eventStore.resetEvent();
+    resetState();
     server.close();
   }
 });
