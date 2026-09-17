@@ -1,5 +1,6 @@
 const config = require('../config/config');
 const eventStore = require('../storage/eventStore');
+const eventLogStore = require('../storage/eventLogStore');
 const { getCurrentTime } = require('../utils/clock');
 const { isValidEmail } = require('../utils/validation');
 const { createServiceError } = require('./serviceError');
@@ -79,6 +80,14 @@ function createHold({ email, seatNumber }, getTime = getCurrentTime) {
 
   const hold = createHoldRecord(event, seat, email, currentTime, true);
   eventStore.updateEvent(event);
+  eventLogStore.addEvent({
+    type: 'HOLD_PLACED',
+    seatNumber: seat.number,
+    email,
+    holdCode: hold.code,
+    expiresAt: hold.expiresAt,
+    automatic: false
+  }, getTime);
 
   return hold;
 }

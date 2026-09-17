@@ -1,4 +1,5 @@
 const eventStore = require('../storage/eventStore');
+const eventLogStore = require('../storage/eventLogStore');
 const { getCurrentTime } = require('../utils/clock');
 const { isValidEmail } = require('../utils/validation');
 const { expireHolds } = require('./holdLifecycleService');
@@ -69,6 +70,10 @@ function joinWaitlist({ email }, getTime = getCurrentTime) {
 
   event.waitlist.push(email);
   eventStore.updateEvent(event);
+  eventLogStore.addEvent({
+    type: 'WAITLIST_JOINED',
+    email
+  }, getTime);
 
   return {
     email,
@@ -91,6 +96,10 @@ function removeFromWaitlist(email) {
 
   event.waitlist.splice(waitlistIndex, 1);
   eventStore.updateEvent(event);
+  eventLogStore.addEvent({
+    type: 'WAITLIST_REMOVED',
+    email
+  });
 
   return { email };
 }

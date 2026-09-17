@@ -1,5 +1,6 @@
 const config = require('../config/config');
 const eventStore = require('../storage/eventStore');
+const eventLogStore = require('../storage/eventLogStore');
 const { getCurrentTime } = require('../utils/clock');
 const { createServiceError } = require('./serviceError');
 const { promoteAvailableSeats } = require('./waitlistPromotionService');
@@ -14,9 +15,16 @@ function expireHolds(getTime = getCurrentTime) {
 
   for (const seat of event.seats) {
     if (seat.status === 'held' && seat.hold && isHoldExpired(seat.hold, getTime)) {
+      const expiredHold = seat.hold;
       seat.status = 'available';
       delete seat.hold;
       expiredHoldCount += 1;
+      eventLogStore.addEvent({
+        type: 'HOLD_EXPIRED',
+        seatNumber: seat.number,
+        email: expiredHold.email,
+        holdCode: expiredHold.code
+      }, getTime);
     }
   }
 
@@ -117,6 +125,12 @@ function confirmHold({ email, holdCode }, getTime = getCurrentTime) {
 
   seat.status = 'confirmed';
   eventStore.updateEvent(event);
+  eventLogStore.addEvent({
+    type: 'HOLD_CONFIRMED',
+    seatNumber: seat.number,
+    email: seat.hold.email,
+    holdCode: seat.hold.code
+  }, getTime);
 
   return getConfirmationResult(seat);
 }
@@ -176,6 +190,14 @@ function extendHold({ email, holdCode }, getTime = getCurrentTime) {
   seat.hold.expiresAt = newExpiresAt.toISOString();
   seat.hold.extensionCount += 1;
   eventStore.updateEvent(event);
+  eventLogStore.addEvent({
+    type: 'HOLD_EXTENDED',
+    seatNumber: seat.number,
+    email: seat.hold.email,
+    holdCode: seat.hold.code,
+    expiresAt: seat.hold.expiresAt,
+    extensionCount: seat.hold.extensionCount
+  }, getTime);
 
   return {
     seatNumber: seat.number,
@@ -224,6 +246,12 @@ function releaseHold({ email, holdCode }, getTime = getCurrentTime) {
   seat.status = 'available';
   delete seat.hold;
   eventStore.updateEvent(event);
+  eventLogStore.addEvent({
+    type: 'HOLD_RELEASED',
+    seatNumber: releasedHold.seatNumber,
+    email: releasedHold.email,
+    holdCode: releasedHold.holdCode
+  }, getTime);
   promoteAvailableSeats(getTime);
 
   return releasedHold;

@@ -1,4 +1,5 @@
 const eventStore = require('../storage/eventStore');
+const eventLogStore = require('../storage/eventLogStore');
 const { getCurrentTime } = require('../utils/clock');
 const { createAutomaticHold } = require('./holdRecordService');
 
@@ -22,6 +23,20 @@ function promoteAvailableSeats(getTime = getCurrentTime) {
       }
 
       promotedHolds.push(automaticHold);
+      eventLogStore.addEvent({
+        type: 'HOLD_PLACED',
+        seatNumber: automaticHold.seatNumber,
+        email,
+        holdCode: automaticHold.code,
+        expiresAt: automaticHold.expiresAt,
+        automatic: true
+      }, getTime);
+      eventLogStore.addEvent({
+        type: 'WAITLIST_PROMOTED',
+        seatNumber: automaticHold.seatNumber,
+        email,
+        holdCode: automaticHold.code
+      }, getTime);
       console.log(
         `[WAITLIST] ${email} was automatically given seat ${seat.number}. Hold code: ${automaticHold.code}`
       );
