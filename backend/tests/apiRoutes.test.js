@@ -173,3 +173,52 @@ test('API validation returns consistent errors', async () => {
     assert.equal(invalidFilter.body.error.code, 'INVALID_SEAT_NUMBER');
   });
 });
+
+test('concurrent requests for one seat create exactly one hold', async () => {
+  await withServer(async (server) => {
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, index) => sendRequest(
+        server,
+        'POST',
+        '/api/holds',
+        {
+          email: `user${index}@example.com`,
+          seatNumber: 1
+        }
+      ))
+    );
+    const successfulResults = results.filter((result) => result.statusCode === 201);
+    const eventLog = await sendRequest(server, 'GET', '/api/events?seatNumber=1');
+    const seat = eventStore.getEvent().seats[0];
+
+    assert.equal(successfulResults.length, 1);
+    assert.equal(results.filter((result) => result.statusCode >= 400).length, 9);
+    assert.equal(seat.status, 'held');
+    assert.equal(seat.hold.email, successfulResults[0].body.hold.email);
+    assert.equal(eventLog.body.events.filter((event) => event.type === 'HOLD_PLACED').length, 1);
+  });
+});
+
+test('concurrent requests for different seats succeed independently', async () => {
+  await withServer(async (server) => {
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, index) => sendRequest(
+        server,
+        'POST',
+        '/api/holds',
+        {
+          email: `user${index}@example.com`,
+          seatNumber: index + 1
+        }
+      ))
+    );
+
+    assert.equal(results.filter((result) => result.statusCode === 201).length, 10);
+    assert.equal(eventStore.getEvent().seats.filter((seat) => seat.status === 'held').length, 10);
+    assert.equal(new Set(
+      eventStore.getEvent().seats
+        .filter((seat) => seat.status === 'held')
+        .map((seat) => seat.hold.email)
+    ).size, 10);
+  });
+});
