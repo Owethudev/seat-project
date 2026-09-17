@@ -52,4 +52,12 @@ The response is:
 
 These values are kept in `backend/src/config/config.js` so they can be changed in one place.
 
-This is Phase 1. Reservation functionality and other system features will be added in later phases.
+## Tests
+
+Run the backend tests from the `backend/` directory:
+
+```bash
+npm test
+```
+
+The current phase creates one in-memory event with the configured number of available seats. Reservation functionality and other system features will be added in later phases.
