@@ -58,6 +58,27 @@ button:disabled {
   gap: 24px;
 }
 
+.view-switcher {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 32px;
+}
+
+.view-tab {
+  padding: 9px 14px;
+  color: #627d98;
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.view-tab-active {
+  color: #102a43;
+  background: #e8f0f5;
+  border-color: #bcccdc;
+}
+
 .page-header {
   padding-bottom: 36px;
   border-bottom: 1px solid #d8e2e8;
@@ -120,6 +141,41 @@ h2 {
 .booking-bar {
   align-items: end;
   padding: 28px 0 20px;
+}
+
+.manage-hold {
+  max-width: 680px;
+  padding: 34px 0 20px;
+}
+
+.manage-intro p:not(.eyebrow) {
+  margin: 12px 0 0;
+  color: #627d98;
+}
+
+.manage-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 32px;
+}
+
+.manage-form label {
+  display: grid;
+  gap: 8px;
+  color: #486581;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.manage-actions button {
+  min-width: 120px;
+  text-transform: capitalize;
 }
 
 .booking-bar label {
@@ -332,6 +388,15 @@ input:focus {
   .waitlist-panel {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .manage-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .manage-actions button {
+    width: 100%;
   }
 
   .availability-summary,

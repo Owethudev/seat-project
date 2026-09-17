@@ -1,22 +1,8 @@
 import { useEffect, useState } from 'react';
+import ManageHold from './ManageHold.jsx';
+import { requestApi } from './api.js';
 
 const POLLING_INTERVAL_MS = 3000;
-
-async function requestApi(path, options = {}) {
-  const response = await fetch(path, {
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    ...options
-  });
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error?.message || 'The request could not be completed.');
-  }
-
-  return data;
-}
 
 function SeatTile({ seat, selected, onSelect }) {
   const isAvailable = seat.status === 'available';
@@ -43,6 +29,7 @@ function App() {
   const [message, setMessage] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [screen, setScreen] = useState('seats');
 
   async function loadSeats(showLoading = false) {
     if (showLoading) {
@@ -138,70 +125,98 @@ function App() {
   return (
     <main className="page-shell">
       <section className="reservation-panel" aria-labelledby="page-title">
+        <nav className="view-switcher" aria-label="Reservation screens">
+          <button
+            className={screen === 'seats' ? 'view-tab view-tab-active' : 'view-tab'}
+            onClick={() => setScreen('seats')}
+            type="button"
+          >
+            Seat map
+          </button>
+          <button
+            className={screen === 'manage' ? 'view-tab view-tab-active' : 'view-tab'}
+            onClick={() => setScreen('manage')}
+            type="button"
+          >
+            Manage hold
+          </button>
+        </nav>
         <header className="page-header">
           <div>
-            <p className="eyebrow">LIVE EVENT SEATING</p>
-            <h1 id="page-title">Choose your seat</h1>
-            <p className="intro">Select an available seat to place a temporary hold.</p>
+            <p className="eyebrow">{screen === 'seats' ? 'LIVE EVENT SEATING' : 'RESERVATION DETAILS'}</p>
+            <h1 id="page-title">{screen === 'seats' ? 'Choose your seat' : 'Manage your hold'}</h1>
+            <p className="intro">
+              {screen === 'seats'
+                ? 'Select an available seat to place a temporary hold.'
+                : 'Confirm, extend, or release an existing hold.'}
+            </p>
           </div>
-          <div className="availability-summary">
-            <strong>{availableSeats.length}</strong>
-            <span>available</span>
-          </div>
+          {screen === 'seats' && (
+            <div className="availability-summary">
+              <strong>{availableSeats.length}</strong>
+              <span>available</span>
+            </div>
+          )}
         </header>
 
-        <form className="booking-bar" onSubmit={handleHold}>
-          <label htmlFor="email">Email address</label>
-          <input
-            id="email"
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-            type="email"
-            value={email}
-          />
-          <button className="primary-button" disabled={isSubmitting || !selectedSeat} type="submit">
-            {isSubmitting ? 'Working...' : selectedSeat ? `Hold seat ${selectedSeat}` : 'Select a seat'}
-          </button>
-        </form>
-
-        <div className="legend" aria-label="Seat status legend">
-          <span><i className="legend-dot available-dot" />Available</span>
-          <span><i className="legend-dot held-dot" />Held</span>
-          <span><i className="legend-dot confirmed-dot" />Confirmed</span>
-        </div>
-
-        {message && (
-          <div className={`message message-${message.type}`} role="status">
-            {message.text}
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="empty-state">Loading seats...</div>
+        {screen === 'manage' ? (
+          <ManageHold />
         ) : (
-          <div className="seat-grid" aria-label="Event seats">
-            {seats.map((seat) => (
-              <SeatTile
-                key={seat.number}
-                onSelect={setSelectedSeat}
-                seat={seat}
-                selected={selectedSeat === seat.number}
+          <>
+            <form className="booking-bar" onSubmit={handleHold}>
+              <label htmlFor="email">Email address</label>
+              <input
+                id="email"
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                type="email"
+                value={email}
               />
-            ))}
-          </div>
-        )}
+              <button className="primary-button" disabled={isSubmitting || !selectedSeat} type="submit">
+                {isSubmitting ? 'Working...' : selectedSeat ? `Hold seat ${selectedSeat}` : 'Select a seat'}
+              </button>
+            </form>
 
-        {isSoldOut && (
-          <section className="waitlist-panel" aria-labelledby="waitlist-title">
-            <div>
-              <p className="eyebrow">SOLD OUT</p>
-              <h2 id="waitlist-title">Stay in line for a seat</h2>
-              <p>Join the waitlist and we will hold the next seat that opens.</p>
+            <div className="legend" aria-label="Seat status legend">
+              <span><i className="legend-dot available-dot" />Available</span>
+              <span><i className="legend-dot held-dot" />Held</span>
+              <span><i className="legend-dot confirmed-dot" />Confirmed</span>
             </div>
-            <button className="secondary-button" disabled={isSubmitting} onClick={handleWaitlist} type="button">
-              Join waitlist
-            </button>
-          </section>
+
+            {message && (
+              <div className={`message message-${message.type}`} role="status">
+                {message.text}
+              </div>
+            )}
+
+            {isLoading ? (
+              <div className="empty-state">Loading seats...</div>
+            ) : (
+              <div className="seat-grid" aria-label="Event seats">
+                {seats.map((seat) => (
+                  <SeatTile
+                    key={seat.number}
+                    onSelect={setSelectedSeat}
+                    seat={seat}
+                    selected={selectedSeat === seat.number}
+                  />
+                ))}
+              </div>
+            )}
+
+            {isSoldOut && (
+              <section className="waitlist-panel" aria-labelledby="waitlist-title">
+                <div>
+                  <p className="eyebrow">SOLD OUT</p>
+                  <h2 id="waitlist-title">Stay in line for a seat</h2>
+                  <p>Join the waitlist and we will hold the next seat that opens.</p>
+                </div>
+                <button className="secondary-button" disabled={isSubmitting} onClick={handleWaitlist} type="button">
+                  Join waitlist
+                </button>
+              </section>
+            )}
+          </>
         )}
 
         <footer className="page-footer">
