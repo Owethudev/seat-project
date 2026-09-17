@@ -4,6 +4,7 @@ const test = require('node:test');
 const config = require('../src/config/config');
 const eventStore = require('../src/storage/eventStore');
 const {
+  confirmHold,
   createHold,
   expireHolds,
   getActiveHold,
@@ -271,4 +272,99 @@ test('old hold history no longer prevents a hold after one hour', () => {
   );
 
   assert.equal(newHold.seatNumber, 6);
+});
+
+test('confirms a valid hold for the matching email', () => {
+  const hold = createHold({ email: 'user@example.com', seatNumber: 1 });
+  const confirmation = confirmHold({
+    email: hold.email,
+    holdCode: hold.code
+  });
+
+  assert.deepEqual(confirmation, {
+    seatNumber: 1,
+    holdCode: hold.code,
+    email: hold.email,
+    status: 'confirmed'
+  });
+  assert.equal(eventStore.getEvent().seats[0].status, 'confirmed');
+});
+
+test('rejects confirmation when the email does not match', () => {
+  const hold = createHold({ email: 'user@example.com', seatNumber: 1 });
+
+  assert.throws(
+    () => confirmHold({ email: 'other@example.com', holdCode: hold.code }),
+    { code: 'HOLD_EMAIL_MISMATCH', statusCode: 403 }
+  );
+});
+
+test('rejects an invalid hold code', () => {
+  assert.throws(
+    () => confirmHold({ email: 'user@example.com', holdCode: 'MISSING' }),
+    { code: 'HOLD_NOT_FOUND', statusCode: 404 }
+  );
+});
+
+test('an expired hold cannot be confirmed', () => {
+  let currentTime = new Date('2026-09-17T12:00:00.000Z');
+  const fakeClock = () => currentTime;
+  const hold = createHold(
+    { email: 'user@example.com', seatNumber: 1 },
+    fakeClock
+  );
+
+  currentTime = new Date(hold.expiresAt);
+
+  assert.throws(
+    () => confirmHold({ email: hold.email, holdCode: hold.code }, fakeClock),
+    { code: 'HOLD_EXPIRED', statusCode: 409 }
+  );
+});
+
+test('a confirmed seat no longer expires', () => {
+  let currentTime = new Date('2026-09-17T12:00:00.000Z');
+  const fakeClock = () => currentTime;
+  const hold = createHold(
+    { email: 'user@example.com', seatNumber: 1 },
+    fakeClock
+  );
+
+  confirmHold({ email: hold.email, holdCode: hold.code }, fakeClock);
+  currentTime = new Date(hold.expiresAt);
+  expireHolds(fakeClock);
+
+  assert.equal(eventStore.getEvent().seats[0].status, 'confirmed');
+  assert.equal(eventStore.getEvent().seats[0].hold.email, hold.email);
+});
+
+test('confirming the same hold twice returns the same result', () => {
+  const hold = createHold({ email: 'user@example.com', seatNumber: 1 });
+  const firstConfirmation = confirmHold({
+    email: hold.email,
+    holdCode: hold.code
+  });
+  const stateAfterFirstConfirmation = JSON.stringify(eventStore.getEvent());
+  const secondConfirmation = confirmHold({
+    email: hold.email,
+    holdCode: hold.code
+  });
+
+  assert.deepEqual(secondConfirmation, firstConfirmation);
+  assert.equal(
+    JSON.stringify(eventStore.getEvent()),
+    stateAfterFirstConfirmation
+  );
+});
+
+test('second confirmation does not create another hold or lose the user association', () => {
+  const hold = createHold({ email: 'user@example.com', seatNumber: 1 });
+
+  confirmHold({ email: hold.email, holdCode: hold.code });
+  confirmHold({ email: hold.email, holdCode: hold.code });
+
+  const event = eventStore.getEvent();
+  assert.equal(event.holdHistory.length, 1);
+  assert.equal(event.seats.filter((seat) => seat.hold).length, 1);
+  assert.equal(event.seats[0].hold.email, hold.email);
 });

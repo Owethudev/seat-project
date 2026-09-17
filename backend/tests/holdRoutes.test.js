@@ -5,13 +5,13 @@ const test = require('node:test');
 const app = require('../src/app');
 const eventStore = require('../src/storage/eventStore');
 
-function sendHoldRequest(server, body) {
+function sendHoldRequest(server, body, path = '/api/holds') {
   return new Promise((resolve, reject) => {
     const address = server.address();
     const request = http.request({
       hostname: '127.0.0.1',
       port: address.port,
-      path: '/api/holds',
+      path,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -69,6 +69,32 @@ test('POST /api/holds returns a consistent error for invalid email', async () =>
       code: 'INVALID_EMAIL',
       message: 'A valid email address is required.'
     });
+  } finally {
+    eventStore.resetEvent();
+    server.close();
+  }
+});
+
+test('POST /api/holds/confirm confirms a hold', async () => {
+  const server = app.listen(0);
+
+  try {
+    const holdResult = await sendHoldRequest(server, {
+      email: 'user@example.com',
+      seatNumber: 1
+    });
+    const confirmationResult = await sendHoldRequest(
+      server,
+      {
+        email: 'user@example.com',
+        holdCode: holdResult.body.hold.code
+      },
+      '/api/holds/confirm'
+    );
+
+    assert.equal(confirmationResult.statusCode, 200);
+    assert.equal(confirmationResult.body.confirmation.status, 'confirmed');
+    assert.equal(confirmationResult.body.confirmation.seatNumber, 1);
   } finally {
     eventStore.resetEvent();
     server.close();

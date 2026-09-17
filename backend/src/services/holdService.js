@@ -178,7 +178,66 @@ function createHold({ email, seatNumber }, getTime = getCurrentTime) {
   };
 }
 
+function getConfirmationResult(seat) {
+  return {
+    seatNumber: seat.number,
+    holdCode: seat.hold.code,
+    email: seat.hold.email,
+    status: 'confirmed'
+  };
+}
+
+function confirmHold({ email, holdCode }, getTime = getCurrentTime) {
+  const event = eventStore.getEvent();
+  const seat = event.seats.find((currentSeat) => (
+    currentSeat.hold && currentSeat.hold.code === holdCode
+  ));
+
+  if (!seat || !seat.hold) {
+    throw createServiceError(
+      'HOLD_NOT_FOUND',
+      'The hold does not exist.',
+      404
+    );
+  }
+
+  if (seat.hold.email !== email) {
+    throw createServiceError(
+      'HOLD_EMAIL_MISMATCH',
+      'The email does not match the hold.',
+      403
+    );
+  }
+
+  if (seat.status === 'confirmed') {
+    return getConfirmationResult(seat);
+  }
+
+  if (seat.status !== 'held') {
+    throw createServiceError(
+      'HOLD_NOT_ACTIVE',
+      'The hold is no longer active.',
+      409
+    );
+  }
+
+  if (isHoldExpired(seat.hold, getTime)) {
+    expireHolds(getTime);
+    throw createServiceError(
+      'HOLD_EXPIRED',
+      'The hold has expired.',
+      409
+    );
+  }
+
+  seat.status = 'confirmed';
+  eventStore.updateEvent(event);
+
+  return getConfirmationResult(seat);
+}
+
 module.exports = {
+  confirmHold,
   createHold,
   expireHolds,
   getActiveHold,
