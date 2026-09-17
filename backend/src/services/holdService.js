@@ -2,16 +2,13 @@ const config = require('../config/config');
 const eventStore = require('../storage/eventStore');
 const { getCurrentTime } = require('../utils/clock');
 const { generateHoldCode } = require('../utils/holdCode');
+const { isValidEmail } = require('../utils/validation');
 
 function createServiceError(code, message, statusCode) {
   const error = new Error(message);
   error.code = code;
   error.statusCode = statusCode;
   return error;
-}
-
-function isValidEmail(email) {
-  return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function isValidSeatNumber(seatNumber) {

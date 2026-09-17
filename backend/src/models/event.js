@@ -15,7 +15,8 @@ function createEvent(seatsPerEvent) {
   return {
     seats,
     holdHistory: [],
-    usedHoldCodes: []
+    usedHoldCodes: [],
+    waitlist: []
   };
 }
 
