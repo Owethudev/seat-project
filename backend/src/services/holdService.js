@@ -60,9 +60,41 @@ function expireHolds(getTime = getCurrentTime) {
 
   if (expiredHoldCount > 0) {
     eventStore.updateEvent(event);
+    const { promoteAvailableSeats } = require('./waitlistService');
+    promoteAvailableSeats(getTime);
   }
 
   return expiredHoldCount;
+}
+
+function createHoldRecord(event, seat, email, createdAt, recordHistory) {
+  const expiresAt = new Date(
+    createdAt.getTime() + config.holdExpirySeconds * 1000
+  );
+  const hold = {
+    code: createUniqueHoldCode(event),
+    email,
+    createdAt: createdAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    extensionCount: 0
+  };
+
+  seat.status = 'held';
+  seat.hold = hold;
+  event.usedHoldCodes.push(hold.code);
+
+  if (recordHistory) {
+    event.holdHistory.push({
+      code: hold.code,
+      email: hold.email,
+      createdAt: hold.createdAt
+    });
+  }
+
+  return {
+    seatNumber: seat.number,
+    ...hold
+  };
 }
 
 function getActiveHold(holdCode, getTime = getCurrentTime) {
@@ -150,32 +182,18 @@ function createHold({ email, seatNumber }, getTime = getCurrentTime) {
     );
   }
 
-  const createdAt = currentTime;
-  const expiresAt = new Date(
-    createdAt.getTime() + config.holdExpirySeconds * 1000
-  );
-  const hold = {
-    code: createUniqueHoldCode(event),
-    email,
-    createdAt: createdAt.toISOString(),
-    expiresAt: expiresAt.toISOString(),
-    extensionCount: 0
-  };
-
-  seat.status = 'held';
-  seat.hold = hold;
-  event.usedHoldCodes.push(hold.code);
-  event.holdHistory.push({
-    code: hold.code,
-    email: hold.email,
-    createdAt: hold.createdAt
-  });
+  const hold = createHoldRecord(event, seat, email, currentTime, true);
   eventStore.updateEvent(event);
 
-  return {
-    seatNumber: seat.number,
-    ...hold
-  };
+  return hold;
+}
+
+function createAutomaticHold(event, seat, email, createdAt) {
+  if (getActiveHoldCount(event, email) >= config.maxActiveHoldsPerUser) {
+    return null;
+  }
+
+  return createHoldRecord(event, seat, email, createdAt, false);
 }
 
 function getConfirmationResult(seat) {
@@ -356,11 +374,15 @@ function releaseHold({ email, holdCode }, getTime = getCurrentTime) {
   delete seat.hold;
   eventStore.updateEvent(event);
 
+  const { promoteAvailableSeats } = require('./waitlistService');
+  promoteAvailableSeats(getTime);
+
   return releasedHold;
 }
 
 module.exports = {
   confirmHold,
+  createAutomaticHold,
   createHold,
   extendHold,
   expireHolds,
