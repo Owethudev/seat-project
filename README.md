@@ -1,6 +1,6 @@
 # Ticket Reservation System
 
-A Node.js and Express ticket reservation API with a React seat-map frontend. The system supports temporary seat holds, expiry, per-user limits, confirmation, extension, release, FIFO waitlist promotion, an append-only event log, and protection against concurrent reservations for the same seat.
+A Node.js and Express ticket reservation API with a simple HTML and browser-JavaScript seat-map frontend. The system supports temporary seat holds, expiry, per-user limits, confirmation, extension, release, FIFO waitlist promotion, an append-only event log, and protection against concurrent reservations for the same seat.
 
 This project is intentionally simple and uses in-memory state for the current assessment.
 
@@ -13,13 +13,13 @@ This project is intentionally simple and uses in-memory state for the current as
 - FIFO waitlist joining and automatic promotion
 - Read-only event history
 - Single-process concurrency protection
-- React seat map and management screens
+- HTML seat map and management screens
 
 ## Technology
 
 - Node.js with JavaScript
 - Express for the backend API
-- React for the frontend
+- HTML, CSS, and browser JavaScript for the frontend
 - Vite for frontend development and building
 - Node's built-in test runner
 - In-memory arrays and objects for storage
@@ -42,11 +42,8 @@ backend/
   tests/                   Business-rule, API, event-log, and concurrency tests
 frontend/
   src/
-    App.jsx                Seat-map screen and screen navigation
-    ManageHold.jsx         Confirm, extend, and release screen
-    EventLog.jsx           Read-only event-log screen
+    app.js                 Seat-map, management, and event-log screens
     api.js                 Shared frontend API request helper
-    main.jsx               React entry point
     styles.css             Frontend styling
   index.html               Vite HTML entry point
   vite.config.js           Vite setup and backend API proxy
